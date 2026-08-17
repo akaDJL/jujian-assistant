@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>居间小助手 · 公开联系人挖掘</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#1f2329; --sub:#6b7280;
+    --line:#e5e7eb; --pri:#2563eb; --pri-d:#1d4ed8; --ok:#16a34a; --warn:#b45309;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.6}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:.5px}
+  .lead{color:var(--sub);margin:0 0 20px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+  label{display:block;font-weight:600;margin-bottom:6px;font-size:13px}
+  textarea,input[type=text],input[type=number],select{
+    width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 11px;
+    font:inherit;background:#fff;color:var(--ink);outline:none}
+  textarea{min-height:120px;resize:vertical;font-family:ui-monospace,Consolas,monospace}
+  textarea:focus,input:focus,select:focus{border-color:var(--pri)}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .row>.col{flex:1 1 200px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .chip{border:1px solid var(--line);background:#fff;color:var(--sub);border-radius:999px;
+    padding:5px 12px;cursor:pointer;font-size:12px;user-select:none;transition:.15s}
+  .chip:hover{border-color:var(--pri);color:var(--pri)}
+  .chip.on{background:var(--pri);border-color:var(--pri);color:#fff}
+  .actions{display:flex;align-items:center;gap:12px;margin-top:4px}
+  .btn{border:none;border-radius:8px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer;transition:.15s}
+  .btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:var(--pri-d)}
+  .btn-pri:disabled{opacity:.55;cursor:not-allowed}
+  .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+  .btn-ghost:hover{border-color:var(--pri);color:var(--pri)}
+  .status{font-size:13px;color:var(--sub);min-height:20px}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);
+    border-top-color:var(--pri);border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes r{to{transform:rotate(360deg)}}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  th{background:#f0f2f5;font-weight:600;white-space:nowrap}
+  td a{color:var(--pri);word-break:break-all}
+  .tag{display:inline-block;background:#eef2ff;color:var(--pri-d);border-radius:5px;
+    padding:1px 7px;margin:2px 4px 2px 0;font-size:12px;word-break:break-all}
+  .tag-m{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600}
+  .tag-c{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
+  .tag-c b{color:#b45309}
+  .empty{color:var(--sub);padding:24px;text-align:center}
+  .meta{font-size:12px;color:var(--sub);margin:0 0 10px}
+  .snip{color:var(--sub);font-size:12px;margin-top:4px}
+  .foot{font-size:12px;color:var(--sub);border-top:1px dashed var(--line);padding-top:14px;margin-top:8px}
+  .foot b{color:var(--warn)}
+  code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>居间小助手 · 公开联系人挖掘</h1>
+  <p class="lead">输入目标企业名单 → 自动突破搜索引擎反爬 → 抽取公开的业务部门联系人 / 电话 / 邮箱 / 关键人。</p>
+
+  <div class="card">
+    <label for="companies">企业名单（每行一家，可批量）</label>
+    <textarea id="companies" placeholder="例如：&#10;北京碧水源科技股份有限公司&#10;中节能环保装备股份有限公司&#10;山西大地环境投资控股有限公司"></textarea>
+
+    <div style="margin-top:14px">
+      <label>关注部门 / 角色（可选，留空=通用业务联系人）</label>
+      <input type="text" id="focus" placeholder="如：环保工程部 / EPC项目部 / 采购部 / 招标联系人" />
+      <div class="chips" id="chips">
+        <span class="chip" data-v="环保工程部">环保工程部</span>
+        <span class="chip" data-v="EPC项目部">EPC项目部</span>
+        <span class="chip" data-v="采购部">采购部</span>
+        <span class="chip" data-v="招标联系人">招标联系人</span>
+        <span class="chip" data-v="商务对接">商务对接</span>
+        <span class="chip" data-v="项目负责人">项目负责人</span>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:14px">
+      <div class="col">
+        <label for="engine">搜索引擎</label>
+        <select id="engine">
+          <option value="sogou">Sogou（中文企业结果最相关，推荐）</option>
+          <option value="bing">Bing（cn.bing，中文）</option>
+          <option value="baidu">Baidu（中文，反爬强）</option>
+        </select>
+      </div>
+      <div class="col" style="flex:0 0 160px">
+        <label for="max">每家企业抓取页数</label>
+        <input type="number" id="max" value="8" min="1" max="30" />
+      </div>
+      <div class="col" style="flex:0 0 200px">
+        <label>手机专项模式</label>
+        <div style="display:flex;align-items:center;gap:8px;height:38px">
+          <input type="checkbox" id="mobileMode" style="width:auto;transform:scale(1.3)" />
+          <span style="font-size:13px;color:var(--sub)">📱 优先挖移动电话（招标/B2B/官网/企业库定向）</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions" style="margin-top:16px">
+      <button class="btn btn-pri" id="go">开始挖掘</button>
+      <button class="btn btn-ghost" id="csv" disabled>导出 CSV</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="meta" id="meta">尚未开始。结果将按来源去重展示。</p>
+    <div id="result"><div class="empty">等待挖掘…</div></div>
+  </div>
+
+  <div class="foot">
+    <b>合规提示：</b>本工具仅聚合<b>公开</b>信息。企业库（企查查/天眼查）登录态 Cookie 仅用于访问你
+    <b>自己账号</b>有权查看的公开工商字段；不采集隐私数据、不破付费墙、控制访问频率。
+    输出仅供参考，请在商务对接前自行核实真实性，并遵守《个人信息保护法》。
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let LAST = [];
+
+// 部门预设 chips
+$("chips").addEventListener("click", (e) => {
+  const c = e.target.closest(".chip");
+  if (!c) return;
+  const v = c.dataset.v;
+  const inp = $("focus");
+  // 切换：已选则取消，未选则填入（多选用空格拼接）
+  if (c.classList.contains("on")) {
+    c.classList.remove("on");
+    inp.value = inp.value.split(/\s+/).filter(x => x && x !== v).join(" ");
+  } else {
+    c.classList.add("on");
+    inp.value = (inp.value.trim() ? inp.value.trim() + " " : "") + v;
+  }
+});
+
+$("go").addEventListener("click", async () => {
+  const companies = $("companies").value.trim();
+  if (!companies) { setStatus("请至少输入一家企业"); return; }
+  const btn = $("go"); btn.disabled = true; $("csv").disabled = true;
+  const companyList = companies.split(/\n/).filter(c => c.trim());
+  setStatus('<span class="spin"></span>正在挖掘 ' + companyList.length + ' 家企业，请耐心等待（通常 30 秒 ~ 2 分钟）…');
+  $("result").innerHTML = '<div class="empty">抓取中…</div>';
+  // 启动计时器显示已等待时间
+  let elapsed = 0;
+  const timer = setInterval(() => {
+    elapsed++;
+    if (elapsed < 60) {
+      setStatus('<span class="spin"></span>已挖掘 ' + elapsed + ' 秒（' + companyList.length + ' 家企业），请继续等待…');
+    } else {
+      const m = Math.floor(elapsed / 60);
+      setStatus('<span class="spin"></span>已挖掘 ' + m + ' 分' + (elapsed%60) + ' 秒，企业较多时需要更久…');
+    }
+  }, 1000);
+  try {
+    // AbortController：300 秒超时保护
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 300_000);
+    const resp = await fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companies,
+        focus: $("focus").value.trim(),
+        engine: $("engine").value,
+        max_results: parseInt($("max").value, 10) || 8,
+        mode: $("mobileMode").checked ? "mobile" : "general",
+      }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(tid);
+    clearInterval(timer);
+    const data = await resp.json();
+    if (!resp.ok) { setStatus(data.error || "请求失败（HTTP " + resp.status + "）"); return; }
+    LAST = data.results || [];
+    render(LAST);
+    setStatus('✅ 完成：共找到 ' + data.count + ' 条含联系信息的来源。');
+    $("csv").disabled = LAST.length === 0;
+  } catch (err) {
+    clearInterval(timer);
+    if (err.name === "AbortError") {
+      setStatus("⏱ 请求超时（5 分钟）。企业数量过多时可减少家数或降低每家页数后重试。");
+    } else {
+      setStatus("请求出错：" + err.message);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function setStatus(s){ $("status").innerHTML = s; }
+
+function render(rows){
+  if (!rows.length){ $("result").innerHTML = '<div class="empty">未挖到公开联系信息，可换搜索引擎或调整关注部门。</div>'; $("meta").textContent="0 条结果"; return; }
+  $("meta").textContent = `共 ${rows.length} 条来源（已按来源去重）`;
+  let html = '<table><thead><tr><th>#</th><th>来源网站</th><th>邮箱</th><th>手机号</th><th>座机</th><th>联系人(姓名+手机)</th><th>置信</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const emails = (r.emails||[]).map(e=>`<span class="tag">${esc(e)}</span>`).join("") || "—";
+    const mobiles = (r.mobiles||[]).map(p=>`<span class="tag tag-m">${esc(p)}</span>`).join("") || "—";
+    const phones = (r.phones||[]).map(p=>`<span class="tag">${esc(p)}</span>`).join("") || "—";
+    // 已配对的「姓名+手机」优先展示；否则退化为纯人名
+    let contacts;
+    if ((r.contacts||[]).length) {
+      contacts = r.contacts.map(c=>`<span class="tag tag-c">${esc(c.name)} <b>${esc(c.mobile)}</b></span>`).join("");
+    } else {
+      contacts = (r.names||[]).map(n=>`<span class="tag">${esc(n)}</span>`).join("") || "—";
+    }
+    // 法定代表人（黄色标签，单独标注身份）
+    const legalHtml = (r.legal||[]).length
+      ? '<div style="margin-top:4px">法人：' + r.legal.map(l=>`<span class="tag" style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a">${esc(l)}</span>`).join("") + '</div>'
+      : "";
+    const conf = r.confidence === "high"
+      ? '<span class="tag" style="background:#dcfce7;color:#15803d">高</span>'
+      : '<span class="tag" style="background:#f1f5f9;color:#64748b">低</span>';
+    const snip = r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : "";
+    html += `<tr>
+      <td>${i+1}</td>
+      <td><a href="${esc(r.source)}" target="_blank" rel="noopener">${esc(shorten(r.source))}</a>${snip}</td>
+      <td>${emails}</td><td>${mobiles}</td><td>${phones}</td><td>${contacts}${legalHtml}</td><td>${conf}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+  $("result").innerHTML = html;
+}
+
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function shorten(u){ try{ const x=new URL(u); return x.host + x.pathname.slice(0,40); }catch{ return u.slice(0,60);} }
+
+$("csv").addEventListener("click", () => {
+  if (!LAST.length) return;
+  const header = ["来源","邮箱","手机号","座机","联系人(姓名+手机)","法定代表人","摘要"];
+  const lines = [header.join(",")];
+  for (const r of LAST){
+    const contacts = (r.contacts||[]).map(c=>`${c.name} ${c.mobile}`).join(" | ") || (r.names||[]).join(" | ");
+    const row = [
+      r.source||"",
+      (r.emails||[]).join(" | "),
+      (r.mobiles||[]).join(" | "),
+      (r.phones||[]).join(" | "),
+      contacts,
+      (r.legal||[]).join(" | "),
+      (r.snippet||"").replace(/\s+/g," ").slice(0,200),
+    ].map(csvcell);
+    lines.push(row.join(","));
+  }
+  const blob = new Blob(["\ufeff"+lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "居间联系人_" + new Date().toISOString().slice(0,10) + ".csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+function csvcell(s){ s = String(s).replace(/"/g,'""'); return /[",\n]/.test(s) ? `"${s}"` : s; }
+</script>
+</body>
+</html>
