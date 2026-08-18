@@ -44,7 +44,10 @@ from social import SOCIAL_SOURCES
 # 配置
 # ---------------------------------------------------------------------------
 
-PROXY: str | None = os.getenv("SCRAPER_PROXY") or None
+# 出公网走代理：优先 SCRAPER_PROXY，否则自动沿用系统 HTTPS_PROXY/HTTP_PROXY（本机为透明代理）。
+# 注意去掉末尾斜杠，避免 curl_cffi 解析代理地址失败。
+_raw_proxy = os.getenv("SCRAPER_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY") or ""
+PROXY: str | None = _raw_proxy.rstrip("/") or None
 
 QCC_COOKIE: str = os.getenv("QCC_COOKIE") or ""
 TYCC_COOKIE: str = os.getenv("TYCC_COOKIE") or ""
@@ -70,9 +73,14 @@ SEARCH_ENGINES = {
     "baidu": {"base": "https://www.baidu.com/s", "params": lambda q: {"wd": q, "rn": 20}, "parse": "baidu"},
 }
 
+# 低价值/噪音站点：即使抽到电话也丢弃（论坛/百科/问答/聚合新闻等非企业官方来源）
 LOW_VALUE_HOSTS = {
-    "baike.baidu.com", "zhihu.com", "map.baidu.com", "wikipedia.org",
-    "visitbeijing.com.cn", "thepaper.cn",
+    "baike.baidu.com", "baike.baidu.com.cn", "zhihu.com", "zhuanlan.zhihu.com",
+    "map.baidu.com", "wikipedia.org", "visitbeijing.com.cn", "thepaper.cn",
+    "sohu.com", "sohu.com.cn", "jjwxc.net", "hanyuguoxue.com", "hanyu.baidu.com",
+    "weibo.com", "weibo.cn", "news.qq.com", "toutiao.com", "baijiahao.baidu.com",
+    "douban.com", "tieba.baidu.com", "qq.com", "163.com", "sina.com.cn",
+    "csdn.net", "cnblogs.com", "jianshu.com", "oschina.net", "yesky.com",
 }
 
 
@@ -568,7 +576,20 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
                 html = pr.text
                 final_url = pr.url or url
             except Exception:
-                return None
+                # 兜底重试：http 失败试 https（或反之），很多官网仅 https 可达
+                alt = (
+                    url.replace("http://", "https://", 1)
+                    if url.startswith("http://")
+                    else url.replace("https://", "http://", 1)
+                )
+                if alt == url:
+                    return None
+                try:
+                    pr = await client.get(alt, timeout=15, headers=headers or {})
+                    html = pr.text
+                    final_url = pr.url or alt
+                except Exception:
+                    return None
             await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
             rec = extract_contacts(html, final_url)
             if not rec:
@@ -587,7 +608,11 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
         hay = (r.get("snippet", "") + " " + (r.get("source") or "")).lower()
         hit = any(t.lower() in hay for t in tokens)
         r["confidence"] = "high" if hit else "low"
-        if r["confidence"] == "low" and _host_of(r["source"]) in LOW_VALUE_HOSTS:
+        # 过滤：低价值站点（论坛/百科/问答/聚合）即使含联系方式也丢弃；
+        # 仅保留「非低价值商业域名 + 确实含电话/邮箱」的结果，降低无关页误报。
+        if _host_of(r["source"]) in LOW_VALUE_HOSTS:
+            continue
+        if not (r.get("mobiles") or r.get("phones") or r.get("emails")):
             continue
         kept.append(r)
     kept.sort(key=lambda r: (r["confidence"] == "high", relevance(r, tokens)), reverse=True)
@@ -649,7 +674,7 @@ async def search_company(
     build = build_mobile_queries if mode == "mobile" else build_queries
     queries = build(company, focus)
     tokens = company_tokens(company)
-    engines = [engine] + [e for e in ("sogou", "bing", "baidu") if e != engine]
+    engines = [engine] + [e for e in ("bing", "sogou", "baidu") if e != engine]
     social = [s for s in (social or []) if s in SOCIAL_SOURCES]
 
     client = AsyncSession(impersonate="chrome", headers=HEADERS, proxy=PROXY, timeout=20, verify=False)

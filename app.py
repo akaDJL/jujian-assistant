@@ -17,6 +17,7 @@ FastAPI 提供：
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -92,7 +93,7 @@ async def api_search(payload: dict):
         companies = [c.strip() for c in str(raw).splitlines() if c.strip()]
 
     focus = str(payload.get("focus", "")).strip()
-    engine = str(payload.get("engine", "sogou")).strip() or "sogou"
+    engine = str(payload.get("engine", "bing")).strip() or "bing"
     try:
         max_results = max(1, min(30, int(payload.get("max_results", 10))))
     except (TypeError, ValueError):
@@ -112,7 +113,16 @@ async def api_search(payload: dict):
     if not companies:
         return JSONResponse({"count": 0, "results": [], "error": "请至少输入一家企业"}, status_code=400)
 
-    results = await search_multi(companies, focus, engine, max_results, mode, social, include_personal)
+    try:
+        results = await asyncio.wait_for(
+            search_multi(companies, focus, engine, max_results, mode, social, include_personal),
+            timeout=150,
+        )
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {"count": 0, "results": [], "error": "检索超时（150s），请减少企业数量或每家企业页数后重试。"},
+            status_code=504,
+        )
 
     # 合规元信息随结果一并返回，便于前端展示与留痕
     meta = {
