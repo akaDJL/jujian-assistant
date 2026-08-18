@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+prev_*
+.git
+.gitignore
+render.yaml
