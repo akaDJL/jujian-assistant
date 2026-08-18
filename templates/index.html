@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>居间小助手 · 公开联系人挖掘</title>
+<title>居间小助手 · 公开联系人挖掘（合规版）</title>
 <style>
   :root{
     --bg:#f5f6f8; --card:#ffffff; --ink:#1f2329; --sub:#6b7280;
-    --line:#e5e7eb; --pri:#2563eb; --pri-d:#1d4ed8; --ok:#16a34a; --warn:#b45309;
+    --line:#e5e7eb; --pri:#2563eb; --pri-d:#1d4ed8; --ok:#16a34a; --warn:#b45309; --bad:#dc2626;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:-apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;font-size:14px;line-height:1.6}
-  .wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px}
   h1{font-size:22px;margin:0 0 4px;letter-spacing:.5px}
   .lead{color:var(--sub);margin:0 0 20px;font-size:13px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
@@ -29,12 +29,19 @@
     padding:5px 12px;cursor:pointer;font-size:12px;user-select:none;transition:.15s}
   .chip:hover{border-color:var(--pri);color:var(--pri)}
   .chip.on{background:var(--pri);border-color:var(--pri);color:#fff}
-  .actions{display:flex;align-items:center;gap:12px;margin-top:4px}
+  .sbox{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-top:8px}
+  .sbox .item{display:flex;align-items:flex-start;gap:8px;padding:6px 0}
+  .sbox .item input{width:auto;margin-top:3px}
+  .sbox .desc{font-size:12px;color:var(--sub)}
+  .tag-rely{font-size:11px;color:var(--ok);border:1px solid #bbf7d0;background:#f0fdf4;border-radius:4px;padding:0 5px;margin-left:6px}
+  .tag-frag{font-size:11px;color:var(--warn);border:1px solid #fde68a;background:#fffbeb;border-radius:4px;padding:0 5px;margin-left:6px}
+  .actions{display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap}
   .btn{border:none;border-radius:8px;padding:10px 20px;font:inherit;font-weight:600;cursor:pointer;transition:.15s}
   .btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:var(--pri-d)}
   .btn-pri:disabled{opacity:.55;cursor:not-allowed}
   .btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
   .btn-ghost:hover{border-color:var(--pri);color:var(--pri)}
+  .btn-sm{padding:5px 12px;font-size:12px}
   .status{font-size:13px;color:var(--sub);min-height:20px}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);
     border-top-color:var(--pri);border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
@@ -48,18 +55,53 @@
   .tag-m{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;font-weight:600}
   .tag-c{background:#ecfdf5;color:#047857;border:1px solid #a7f3d0}
   .tag-c b{color:#b45309}
+  .tag-car{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:11px;margin-left:4px}
   .empty{color:var(--sub);padding:24px;text-align:center}
   .meta{font-size:12px;color:var(--sub);margin:0 0 10px}
   .snip{color:var(--sub);font-size:12px;margin-top:4px}
   .foot{font-size:12px;color:var(--sub);border-top:1px dashed var(--line);padding-top:14px;margin-top:8px}
   .foot b{color:var(--warn)}
   code{background:#f0f2f5;padding:1px 5px;border-radius:4px;font-size:12px}
+  /* 合规横幅 */
+  .consent{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:13px}
+  .consent.ok{background:#ecfdf5;border-color:#a7f3d0}
+  .consent .stat{font-weight:600}
+  .consent .stat.bad{color:var(--bad)}
+  .consent .stat.ok{color:var(--ok)}
+  .switch{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px}
+  .switch input{width:auto;transform:scale(1.2)}
+  /* 弹窗 */
+  .mask{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;z-index:50;overflow:auto}
+  .modal{background:#fff;border-radius:12px;max-width:680px;width:100%;padding:22px 24px}
+  .modal h2{margin:0 0 10px;font-size:18px}
+  .modal pre{white-space:pre-wrap;font:13px/1.7 ui-monospace,Consolas,monospace;background:#f8fafc;
+    border:1px solid var(--line);border-radius:8px;padding:12px;max-height:50vh;overflow:auto}
+  .modal .row2{display:flex;gap:10px;justify-content:flex-end;margin-top:16px;align-items:center}
+  .hidden{display:none}
+  .dnc-row{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+  .dnc-row input[type=text]{flex:1;min-width:200px}
+  .pill{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;margin:2px}
+  .pill-low{background:#dcfce7;color:#15803d}
+  .pill-med{background:#fef9c3;color:#854d0e}
+  .pill-high{background:#fee2e2;color:#b91c1c}
+  .src-sub{font-size:11px;color:var(--sub)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>居间小助手 · 公开联系人挖掘</h1>
-  <p class="lead">输入目标企业名单 → 自动突破搜索引擎反爬 → 抽取公开的业务部门联系人 / 电话 / 邮箱 / 关键人。</p>
+  <h1>居间小助手 · 公开联系人挖掘（合规版）</h1>
+  <p class="lead">输入目标企业名单 → 搜索引擎 + 企业库 + 社媒公开源 → 抽取业务联系人 / 电话 / 邮箱 / 关键人，全程合规护栏。</p>
+
+  <!-- 合规状态横幅 -->
+  <div class="consent" id="consentCard">
+    <div>合规状态：<span class="stat bad" id="consentStat">未确认</span>
+      <span id="consentTime" class="src-sub"></span></div>
+    <div class="switch">
+      <input type="checkbox" id="consentChk" disabled />
+      <label for="consentChk" style="margin:0;font-weight:400">我已知悉并同意《使用须知》（含 PIPL 合规与拒收义务）</label>
+      <button class="btn btn-ghost btn-sm" id="viewTerms">查看并同意</button>
+    </div>
+  </div>
 
   <div class="card">
     <label for="companies">企业名单（每行一家，可批量）</label>
@@ -100,22 +142,60 @@
       </div>
     </div>
 
+    <div style="margin-top:14px">
+      <label>社媒来源（仅抓公开业务联系方式；不突破登录墙）</label>
+      <div class="sbox" id="socialBox"><span class="desc">加载中…</span></div>
+    </div>
+
+    <div class="switch" style="margin-top:12px">
+      <input type="checkbox" id="includePersonal" style="width:auto;transform:scale(1.2)" />
+      <label for="includePersonal" style="margin:0;font-weight:400">
+        包含「无商务场景佐证的纯个人号」（高风险，默认关闭；开启即自担 PIPL 责任）
+      </label>
+    </div>
+
     <div class="actions" style="margin-top:16px">
-      <button class="btn btn-pri" id="go">开始挖掘</button>
+      <button class="btn btn-pri" id="go" disabled>开始挖掘</button>
       <button class="btn btn-ghost" id="csv" disabled>导出 CSV</button>
       <span class="status" id="status"></span>
     </div>
   </div>
 
   <div class="card">
-    <p class="meta" id="meta">尚未开始。结果将按来源去重展示。</p>
+    <p class="meta" id="meta">尚未开始。结果将按来源去重、按手机号跨源合并展示。</p>
     <div id="result"><div class="empty">等待挖掘…</div></div>
   </div>
 
+  <!-- 拒收名单 -->
+  <div class="card">
+    <label>拒收名单（Do-Not-Contact）· 个人要求「不联系/删除」的号码永久屏蔽</label>
+    <div class="dnc-row">
+      <input type="text" id="dncMobile" placeholder="输入要屏蔽的手机号，如 13800138000" />
+      <input type="text" id="dncReason" placeholder="原因（可选），如：本人要求删除" style="flex:1;min-width:160px" />
+      <button class="btn btn-ghost btn-sm" id="dncAdd">加入拒收</button>
+      <button class="btn btn-ghost btn-sm" id="dncRefresh">刷新</button>
+    </div>
+    <div id="dncList"><span class="desc">（空）</span></div>
+  </div>
+
   <div class="foot">
-    <b>合规提示：</b>本工具仅聚合<b>公开</b>信息。企业库（企查查/天眼查）登录态 Cookie 仅用于访问你
-    <b>自己账号</b>有权查看的公开工商字段；不采集隐私数据、不破付费墙、控制访问频率。
-    输出仅供参考，请在商务对接前自行核实真实性，并遵守《个人信息保护法》。
+    <b>合规提示：</b>本工具仅聚合<b>公开</b>信息，遵守目标站点 robots.txt 与 ToS、控制访问频率；
+    企业库 Cookie 仅用于访问你<b>自己账号</b>有权查看的公开工商字段；不破登录墙/付费墙/验证码。
+    手机号受《个人信息保护法》保护——商务场景个人号依 PIPL 第 27 条合理处理，<b>个人可随时要求屏蔽与删除</b>。
+    输出仅供参考，商务对接前请自行核实真实性。
+  </div>
+</div>
+
+<!-- 使用须知弹窗 -->
+<div class="mask hidden" id="termsMask">
+  <div class="modal">
+    <h2>《使用须知》（合规确认）</h2>
+    <pre id="termsText">加载中…</pre>
+    <div class="row2">
+      <label style="margin:0;font-weight:400"><input type="checkbox" id="termsChk" style="width:auto;transform:scale(1.2)" /> 我已阅读并同意上述条款</label>
+      <button class="btn btn-ghost btn-sm" id="termsCancel">取消</button>
+      <button class="btn btn-pri btn-sm" id="termsOk" disabled>确认同意</button>
+    </div>
   </div>
 </div>
 
@@ -123,13 +203,43 @@
 const $ = (id) => document.getElementById(id);
 let LAST = [];
 
-// 部门预设 chips
+// ---------- 启动：拉取条款 + 同意状态 ----------
+async function boot(){
+  try{
+    const r = await fetch("/api/terms"); const d = await r.json();
+    $("termsText").textContent = d.terms || "";
+    renderSocial(d.social_sources || []);
+    if (d.acknowledged){
+      markConsented(d.version);
+    }
+  }catch(e){ console.warn(e); }
+}
+function renderSocial(list){
+  const box = $("socialBox");
+  if (!list.length){ box.innerHTML = '<span class="desc">无可用社媒源</span>'; return; }
+  box.innerHTML = list.map(s=>{
+    const tag = s.reliable ? '<span class="tag-rely">稳定</span>' : '<span class="tag-frag">尽力而为·ToS受限</span>';
+    const chk = s.key==="wechat" ? "checked" : "";
+    return `<div class="item">
+      <input type="checkbox" data-s="${s.key}" ${chk}/>
+      <div><div>${s.label}${tag}</div></div>
+    </div>`;
+  }).join("");
+}
+function markConsented(version){
+  $("consentStat").textContent = "已确认 ("+version+")";
+  $("consentStat").className = "stat ok";
+  $("consentTime").textContent = "";
+  $("consentChk").checked = true;
+  $("consentCard").classList.add("ok");
+  $("go").disabled = false;
+}
+
+// ---------- 部门 chips ----------
 $("chips").addEventListener("click", (e) => {
   const c = e.target.closest(".chip");
   if (!c) return;
-  const v = c.dataset.v;
-  const inp = $("focus");
-  // 切换：已选则取消，未选则填入（多选用空格拼接）
+  const v = c.dataset.v; const inp = $("focus");
   if (c.classList.contains("on")) {
     c.classList.remove("on");
     inp.value = inp.value.split(/\s+/).filter(x => x && x !== v).join(" ");
@@ -139,89 +249,101 @@ $("chips").addEventListener("click", (e) => {
   }
 });
 
+// ---------- 使用须知弹窗 ----------
+$("viewTerms").addEventListener("click", () => $("termsMask").classList.remove("hidden"));
+$("termsCancel").addEventListener("click", () => $("termsMask").classList.add("hidden"));
+$("termsChk").addEventListener("change", (e) => $("termsOk").disabled = !e.target.checked);
+$("termsOk").addEventListener("click", async () => {
+  try{
+    const r = await fetch("/api/consent", {method:"POST"});
+    if (r.ok){ $("termsMask").classList.add("hidden"); markConsented($("consentStat").textContent.includes("(")? $("consentStat").textContent : "2026-08-18"); window.location.reload(); }
+  }catch(e){ alert("确认失败："+e.message); }
+});
+
+// ---------- 挖掘 ----------
 $("go").addEventListener("click", async () => {
   const companies = $("companies").value.trim();
   if (!companies) { setStatus("请至少输入一家企业"); return; }
+  if (!$("consentChk").checked) { setStatus("请先阅读并同意《使用须知》"); return; }
   const btn = $("go"); btn.disabled = true; $("csv").disabled = true;
   const companyList = companies.split(/\n/).filter(c => c.trim());
-  setStatus('<span class="spin"></span>正在挖掘 ' + companyList.length + ' 家企业，请耐心等待（通常 30 秒 ~ 2 分钟）…');
+  const social = [...document.querySelectorAll("#socialBox input[data-s]:checked")].map(x=>x.dataset.s);
+  setStatus('<span class="spin"></span>正在挖掘 ' + companyList.length + ' 家企业（含社媒:'+social.length+'源），请耐心等待…');
   $("result").innerHTML = '<div class="empty">抓取中…</div>';
-  // 启动计时器显示已等待时间
   let elapsed = 0;
   const timer = setInterval(() => {
     elapsed++;
-    if (elapsed < 60) {
-      setStatus('<span class="spin"></span>已挖掘 ' + elapsed + ' 秒（' + companyList.length + ' 家企业），请继续等待…');
-    } else {
-      const m = Math.floor(elapsed / 60);
-      setStatus('<span class="spin"></span>已挖掘 ' + m + ' 分' + (elapsed%60) + ' 秒，企业较多时需要更久…');
-    }
+    setStatus('<span class="spin"></span>已挖掘 ' + elapsed + ' 秒（' + companyList.length + ' 家企业）…');
   }, 1000);
   try {
-    // AbortController：300 秒超时保护
     const ctrl = new AbortController();
     const tid = setTimeout(() => ctrl.abort(), 300_000);
     const resp = await fetch("/api/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        companies,
-        focus: $("focus").value.trim(),
-        engine: $("engine").value,
+        companies, focus: $("focus").value.trim(), engine: $("engine").value,
         max_results: parseInt($("max").value, 10) || 8,
         mode: $("mobileMode").checked ? "mobile" : "general",
+        social, include_personal: $("includePersonal").checked,
       }),
       signal: ctrl.signal,
     });
-    clearTimeout(tid);
-    clearInterval(timer);
+    clearTimeout(tid); clearInterval(timer);
     const data = await resp.json();
-    if (!resp.ok) { setStatus(data.error || "请求失败（HTTP " + resp.status + "）"); return; }
+    if (!resp.ok) {
+      if (data.need_consent) { setStatus("⚠️ " + (data.error||"需先同意《使用须知》")); $("termsMask").classList.remove("hidden"); }
+      else setStatus(data.error || "请求失败（HTTP " + resp.status + "）");
+      return;
+    }
     LAST = data.results || [];
     render(LAST);
-    setStatus('✅ 完成：共找到 ' + data.count + ' 条含联系信息的来源。');
+    const c = data.compliance || {};
+    setStatus('✅ 完成：' + data.count + ' 条结果 | 审计累计 ' + (c.audit_total||0) + ' 条 | 拒收名单 ' + (c.dnc_count||0) + ' 个');
     $("csv").disabled = LAST.length === 0;
   } catch (err) {
     clearInterval(timer);
-    if (err.name === "AbortError") {
-      setStatus("⏱ 请求超时（5 分钟）。企业数量过多时可减少家数或降低每家页数后重试。");
-    } else {
-      setStatus("请求出错：" + err.message);
-    }
-  } finally {
-    btn.disabled = false;
-  }
+    setStatus(err.name === "AbortError" ? "⏱ 超时（5 分钟），可减少家数或页数后重试。" : "请求出错：" + err.message);
+  } finally { btn.disabled = false; }
 });
 
 function setStatus(s){ $("status").innerHTML = s; }
 
 function render(rows){
-  if (!rows.length){ $("result").innerHTML = '<div class="empty">未挖到公开联系信息，可换搜索引擎或调整关注部门。</div>'; $("meta").textContent="0 条结果"; return; }
-  $("meta").textContent = `共 ${rows.length} 条来源（已按来源去重）`;
-  let html = '<table><thead><tr><th>#</th><th>来源网站</th><th>邮箱</th><th>手机号</th><th>座机</th><th>联系人(姓名+手机)</th><th>置信</th></tr></thead><tbody>';
+  if (!rows.length){ $("result").innerHTML = '<div class="empty">未挖到公开联系信息，可换引擎/社媒或调整关注部门。</div>'; $("meta").textContent="0 条结果"; return; }
+  $("meta").textContent = `共 ${rows.length} 条（已按来源去重、按手机号跨源合并）`;
+  let html = `<table><thead><tr><th>#</th><th>来源网站</th><th>邮箱</th><th>手机号(运营商)</th><th>座机</th>
+    <th>联系人(姓名+手机)</th><th>场景/风险</th><th>置信</th></tr></thead><tbody>`;
   rows.forEach((r, i) => {
+    const sources = r.sources && r.sources.length ? r.sources : [r.source];
+    const primary = sources[0];
+    const others = sources.slice(1).map(s=>`<div class="src-sub">+ ${esc(shorten(s))}</div>`).join("");
     const emails = (r.emails||[]).map(e=>`<span class="tag">${esc(e)}</span>`).join("") || "—";
-    const mobiles = (r.mobiles||[]).map(p=>`<span class="tag tag-m">${esc(p)}</span>`).join("") || "—";
+    const carriers = r.mobile_carriers || {};
+    const mobiles = (r.mobiles||[]).map(p=>`<span class="tag tag-m">${esc(p)}<span class="tag-car">${esc(carriers[p]||"")}</span></span>`).join("") || "—";
     const phones = (r.phones||[]).map(p=>`<span class="tag">${esc(p)}</span>`).join("") || "—";
-    // 已配对的「姓名+手机」优先展示；否则退化为纯人名
     let contacts;
     if ((r.contacts||[]).length) {
-      contacts = r.contacts.map(c=>`<span class="tag tag-c">${esc(c.name)} <b>${esc(c.mobile)}</b></span>`).join("");
+      contacts = r.contacts.map(c=>`<span class="tag tag-c">${esc(c.name)} <b>${esc(c.mobile)}</b><span class="tag-car">${esc(c.carrier||"")}</span></span>`).join("");
     } else {
       contacts = (r.names||[]).map(n=>`<span class="tag">${esc(n)}</span>`).join("") || "—";
     }
-    // 法定代表人（黄色标签，单独标注身份）
     const legalHtml = (r.legal||[]).length
       ? '<div style="margin-top:4px">法人：' + r.legal.map(l=>`<span class="tag" style="background:#fef9c3;color:#854d0e;border:1px solid #fde68a">${esc(l)}</span>`).join("") + '</div>'
       : "";
+    const ctx = r.context || "business_line";
+    const risk = r.risk || "low";
+    const riskPill = risk==="low" ? '<span class="pill pill-low">低</span>' : risk==="medium" ? '<span class="pill pill-med">中</span>' : '<span class="pill pill-high">高</span>';
+    const ctxLabel = ctx==="business_line" ? "企业业务线" : ctx==="personal_in_business" ? "商务场景个人号" : "未知个人";
     const conf = r.confidence === "high"
       ? '<span class="tag" style="background:#dcfce7;color:#15803d">高</span>'
       : '<span class="tag" style="background:#f1f5f9;color:#64748b">低</span>';
     const snip = r.snippet ? `<div class="snip">${esc(r.snippet)}</div>` : "";
+    const metaLine = `<div class="snip">场景：${ctxLabel}${riskPill} · 法律基础：${esc(r.legal_basis||"")}${r.collected_at?(" · 采集："+esc(r.collected_at.slice(0,19).replace("T"," "))):""}</div>`;
     html += `<tr>
       <td>${i+1}</td>
-      <td><a href="${esc(r.source)}" target="_blank" rel="noopener">${esc(shorten(r.source))}</a>${snip}</td>
-      <td>${emails}</td><td>${mobiles}</td><td>${phones}</td><td>${contacts}${legalHtml}</td><td>${conf}</td>
+      <td><a href="${esc(primary)}" target="_blank" rel="noopener">${esc(shorten(primary))}</a>${others}${snip}${metaLine}</td>
+      <td>${emails}</td><td>${mobiles}</td><td>${phones}</td><td>${contacts}${legalHtml}</td>
+      <td>${ctxLabel}<br>${riskPill}</td><td>${conf}</td>
     </tr>`;
   });
   html += "</tbody></table>";
@@ -231,19 +353,26 @@ function render(rows){
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function shorten(u){ try{ const x=new URL(u); return x.host + x.pathname.slice(0,40); }catch{ return u.slice(0,60);} }
 
+// ---------- CSV 导出（含合规列） ----------
 $("csv").addEventListener("click", () => {
   if (!LAST.length) return;
-  const header = ["来源","邮箱","手机号","座机","联系人(姓名+手机)","法定代表人","摘要"];
+  const header = ["主来源","全部来源","邮箱","手机号","运营商","座机","联系人(姓名+手机+运营商)","法定代表人","场景","风险","法律基础","采集时间","摘要"];
   const lines = [header.join(",")];
   for (const r of LAST){
-    const contacts = (r.contacts||[]).map(c=>`${c.name} ${c.mobile}`).join(" | ") || (r.names||[]).join(" | ");
+    const sources = (r.sources&&r.sources.length)?r.sources:[r.source];
+    const carriers = r.mobile_carriers || {};
+    const contacts = (r.contacts||[]).map(c=>`${c.name} ${c.mobile} ${c.carrier||""}`).join(" | ") || (r.names||[]).join(" | ");
     const row = [
       r.source||"",
+      sources.join(" | "),
       (r.emails||[]).join(" | "),
       (r.mobiles||[]).join(" | "),
+      (r.mobiles||[]).map(m=>carriers[m]||"").join(" | "),
       (r.phones||[]).join(" | "),
       contacts,
       (r.legal||[]).join(" | "),
+      r.context||"", r.risk||"", r.legal_basis||"",
+      (r.collected_at||"").slice(0,19).replace("T"," "),
       (r.snippet||"").replace(/\s+/g," ").slice(0,200),
     ].map(csvcell);
     lines.push(row.join(","));
@@ -251,11 +380,41 @@ $("csv").addEventListener("click", () => {
   const blob = new Blob(["\ufeff"+lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "居间联系人_" + new Date().toISOString().slice(0,10) + ".csv";
+  a.download = "居间联系人_合规_" + new Date().toISOString().slice(0,10) + ".csv";
   a.click();
   URL.revokeObjectURL(a.href);
 });
 function csvcell(s){ s = String(s).replace(/"/g,'""'); return /[",\n]/.test(s) ? `"${s}"` : s; }
+
+// ---------- 拒收名单 ----------
+async function loadDnc(){
+  try{
+    const r = await fetch("/api/dnc"); const d = await r.json();
+    const box = $("dncList");
+    if (!d.blocked || !d.blocked.length){ box.innerHTML = '<span class="desc">（空）</span>'; return; }
+    box.innerHTML = d.blocked.map(b=>`<div class="item" style="padding:4px 0">
+      <span class="tag tag-m">${esc(b.mobile)}</span>
+      <span class="src-sub">${esc(b.reason||"")} · ${esc((b.added_at||"").slice(0,19).replace("T"," "))}</span>
+      <button class="btn btn-ghost btn-sm" data-del="${esc(b.mobile)}">移除</button>
+    </div>`).join("");
+    box.querySelectorAll("[data-del]").forEach(btn=>btn.addEventListener("click", async ()=>{
+      await fetch("/api/dnc", {method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({mobile:btn.dataset.del})});
+      loadDnc();
+    }));
+  }catch(e){ console.warn(e); }
+}
+$("dncRefresh").addEventListener("click", loadDnc);
+$("dncAdd").addEventListener("click", async () => {
+  const m = $("dncMobile").value.trim(); const reason = $("dncReason").value.trim();
+  if (!m){ alert("请输入手机号"); return; }
+  const r = await fetch("/api/dnc", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({mobile:m, reason})});
+  const d = await r.json();
+  if (d.ok){ $("dncMobile").value=""; $("dncReason").value=""; loadDnc(); }
+  else alert(d.error || "加入失败");
+});
+
+boot();
+loadDnc();
 </script>
 </body>
 </html>
