@@ -103,6 +103,23 @@ def _is_low_value_host(host: str) -> bool:
     return False
 
 
+# 招标类站点识别关键词：全国公共资源交易平台 / 各地招标投标公共服务平台 / 采购网等。
+# 命中即标记为 tender 来源（便于审计与优先级），关键词均取较特异的拼音/品牌串，避免误伤普通站点。
+TENDER_HOST_KEYWORDS = (
+    "ggzy", "zhaobiao", "ebidding", "cebpubservice", "ccgp",
+    "tender", "zcgg", "bidcenter", "cjeb", "ztb",
+    "zb.",  # 省市招投标平台标准子域：zb.beijing.gov.cn / zb.shandong.gov.cn 等
+)
+
+
+def _is_tender_host(host: str) -> bool:
+    """判断域名是否属于公共资源交易 / 招标投标类平台（命中关键词即标记招标来源）。"""
+    host = (host or "").lower()
+    if not host:
+        return False
+    return any(k in host for k in TENDER_HOST_KEYWORDS)
+
+
 # ---------------------------------------------------------------------------
 # 运营商识别 + 手机号归一化 / 校验
 # ---------------------------------------------------------------------------
@@ -158,7 +175,9 @@ LANDLINE_RE = re.compile(r"(?<!\d)(0\d{2,3}[-\s]?\d{7,8})(?!\d)")
 
 NAME_LABEL_RE = re.compile(
     r"(?:联系人|负责人|项目经理|项目主管|商务经理|销售经理|采购经理|"
-    r"项目联系人|对接人|招标联系人|法人代表|执行事务合伙人)\s*[:：]?\s*([\u4e00-\u9fa5]{2,4})"
+    r"项目联系人|招标联系人|招标代理|代理联系人|采购人|招标人|业主|"
+    r"建设单位|发包人|采购代理|招标代理联系人|采购人联系人|项目业主|"
+    r"对接人|法人代表|执行事务合伙人)\s*[:：]?\s*([\u4e00-\u9fa5]{2,4})"
 )
 NAME_ROLE_RE = re.compile(
     r"(?<![经主部主任总商销采工])([\u4e00-\u9fa5]{2,3})\s*[(（]\s*(?:项目经理|项目主管|负责人|"
@@ -248,8 +267,25 @@ def build_enterprise_queries(company: str) -> list[str]:
     ]
 
 
+def build_tender_queries(company: str, focus: str = "") -> list[str]:
+    """偏招标类平台的检索式：全国公共资源交易平台 / 各地招标投标公共服务平台 / 政府采购等。"""
+    c = company.strip()
+    qs = [
+        f'"{c}" 招标公告 项目联系人 手机',
+        f'"{c}" 中标公告 项目经理 联系电话',
+        f'"{c}" 公共资源交易 招标人 联系方式',
+        f'"{c}" 招标投标公共服务平台 联系人',
+        f'"{c}" 政府采购 项目联系人 电话',
+        f'"{c}" 建设工程 招标代理 联系人 手机',
+    ]
+    f = (focus or "").strip()
+    if f:
+        qs.append(f'"{c}" {f} 招标 项目联系人 手机')
+    return qs
+
+
 def relevance(rec: dict, tokens: list[str]) -> int:
-    hay = (rec.get("snippet", "") + " " + (rec.get("source") or "")).lower()
+    hay = (rec.get("snippet", "") + " " + (rec.get("source") or "") + " " + (rec.get("title") or "")).lower()
     score = sum(1 for t in tokens if t.lower() in hay)
     score += len(rec.get("emails", [])) + len(rec.get("phones", []))
     score += 2 * len(rec.get("mobiles", []))
@@ -317,6 +353,8 @@ def parse_serp(engine: str, html: str, max_results: int) -> list[str]:
 
 def extract_contacts(html: str, source: str) -> dict | None:
     soup = BeautifulSoup(html, "lxml")
+    title_tag = soup.find("title")
+    page_title = title_tag.get_text(" ", strip=True) if title_tag else ""
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
     text = soup.get_text(" ", strip=True)
@@ -358,6 +396,7 @@ def extract_contacts(html: str, source: str) -> dict | None:
         "legal": sorted(legal),
         "contacts": contacts,
         "snippet": snippet,
+        "title": page_title,
     }
 
 
@@ -473,6 +512,8 @@ def _apply_compliance(rec: dict, text: str, source_type: str, include_personal: 
     if not (rec.get("emails") or rec["mobiles"] or rec.get("phones") or
             rec.get("names") or rec.get("legal")):
         return None
+    # 兜底：保证 confidence 字段恒存在（search 来源在 _fetch_pages 里细化，企业库直通记录用 low 兜底）
+    rec.setdefault("confidence", "low")
     return rec
 
 
@@ -667,7 +708,11 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
                         break
             if not rec:
                 return None
-            return _apply_compliance(rec, html, source_type, include_personal)
+            # 招标类平台命中：标记来源为 tender（便于审计与优先级排序）
+            eff_type = source_type
+            if source_type == "search" and _is_tender_host(_host_of(final_url)):
+                eff_type = "tender"
+            return _apply_compliance(rec, html, eff_type, include_personal)
 
     tasks = [asyncio.create_task(worker(u)) for u in url_set]
     raw: list[dict] = []
@@ -679,7 +724,7 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
     kept: list[dict] = []
     core = tokens[0].lower() if tokens else ""
     for r in raw:
-        hay = (r.get("snippet", "") + " " + (r.get("source") or "")).lower()
+        hay = (r.get("snippet", "") + " " + (r.get("source") or "") + " " + (r.get("title") or "")).lower()
         # 强相关性：必须命中完整企业名（core）才算相关，否则判 low
         hit = (core in hay) if core else any(t.lower() in hay for t in tokens)
         r["confidence"] = "high" if hit else "low"
@@ -737,7 +782,20 @@ async def _fetch_enterprise(client, company: str, max_results: int, include_pers
         except Exception as e:
             print(f"[warn] 天眼查查询失败: {e}")
 
+    # 企业库按企业名直查，命中完整企业名即 high（与 search 来源的强相关标准一致）
+    _mark_enterprise_confidence(recs, tokens)
     return [x for x in recs if x]
+
+
+def _mark_enterprise_confidence(recs: list[dict | None], tokens: list[str]) -> None:
+    """企业库记录按完整企业名升级 confidence；命中 title/source 即 high。"""
+    core = tokens[0].lower() if tokens else ""
+    for x in recs:
+        if not x:
+            continue
+        hay = (x.get("title", "") + " " + (x.get("source") or "")).lower()
+        if core and core in hay:
+            x["confidence"] = "high"
 
 
 async def search_company(
@@ -751,6 +809,10 @@ async def search_company(
 ) -> list[dict]:
     build = build_mobile_queries if mode == "mobile" else build_queries
     queries = build(company, focus)
+    # 扩展来源覆盖：追加招标类平台检索式 + 工商信息(天眼查/企查查/爱企查)检索式，
+    # 让搜索引擎也回挖这些平台上的公开联系人/项目联系人。
+    queries += build_tender_queries(company, focus)
+    queries += build_enterprise_queries(company)
     tokens = company_tokens(company)
     engines = [engine] + [e for e in ("bing", "sogou", "baidu") if e != engine]
     social = [s for s in (social or []) if s in SOCIAL_SOURCES]
@@ -758,7 +820,7 @@ async def search_company(
     client = AsyncSession(impersonate="chrome", headers=HEADERS, proxy=PROXY, timeout=20, verify=False, allow_redirects=True)
     collected: list[dict] = []
     try:
-        # 1) 搜索引擎（多引擎回退）
+        # 1) 搜索引擎（多引擎回退）；general 无社媒时首引擎够量即停，保速度
         for eng_name in engines:
             eng = SEARCH_ENGINES[eng_name]
             url_set: list[str] = []
@@ -772,11 +834,13 @@ async def search_company(
             url_set = url_set[:max_results]
             if url_set:
                 collected.extend(await _fetch_pages(client, url_set, tokens, source_type="search", include_personal=include_personal))
-            # general 模式：拿到即返（快），除非还要跑社媒/企业库
-            if mode != "mobile" and not social and collected:
-                return collected
+            if mode != "mobile" and not social and len(url_set) >= max_results:
+                break
 
-        # 2) 社媒源（用户勾选）
+        # 2) 企业库（天眼查/企查查/爱企查）—— 始终尝试作为高可信来源（不再仅限 mobile 模式）
+        collected.extend(await _fetch_enterprise(client, company, max_results, include_personal))
+
+        # 3) 社媒源（用户勾选）
         for skey in social:
             src = SOCIAL_SOURCES[skey]
             try:
@@ -786,10 +850,6 @@ async def search_company(
                         client, urls, tokens, source_type=src["source_type"], include_personal=include_personal))
             except Exception as e:
                 print(f"[warn] 社媒源 {skey} 失败: {e}")
-
-        # 3) mobile 模式：直接打企业库
-        if mode == "mobile":
-            collected.extend(await _fetch_enterprise(client, company, max_results, include_personal))
 
         # 去重 + 跨来源合并 + 排序
         seen: set[str] = set()
