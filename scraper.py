@@ -92,6 +92,17 @@ def _host_of(url: str) -> str:
         return ""
 
 
+def _is_low_value_host(host: str) -> bool:
+    """判断域名是否为低价值站点（含子域匹配：bbs.jjwxc.net 也命中 jjwxc.net）。"""
+    host = (host or "").lower()
+    if not host:
+        return False
+    for bad in LOW_VALUE_HOSTS:
+        if host == bad or host.endswith("." + bad):
+            return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # 运营商识别 + 手机号归一化 / 校验
 # ---------------------------------------------------------------------------
@@ -192,7 +203,12 @@ def company_tokens(name: str) -> list[str]:
         toks.add(core[:4]); toks.add(core[-4:])
     for i in range(len(core) - 2):
         toks.add(core[i:i + 3])
-    return [t for t in toks if len(t) >= 2]
+    # 完整 core 始终放第一位，供「强相关性」判断（必须命中完整企业名才算相关）
+    ordered = [core]
+    for t in toks:
+        if t != core and len(t) >= 2:
+            ordered.append(t)
+    return ordered
 
 
 def build_queries(company: str, focus: str = "") -> list[str]:
@@ -661,15 +677,20 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
             raw.append(rec)
 
     kept: list[dict] = []
+    core = tokens[0].lower() if tokens else ""
     for r in raw:
         hay = (r.get("snippet", "") + " " + (r.get("source") or "")).lower()
-        hit = any(t.lower() in hay for t in tokens)
+        # 强相关性：必须命中完整企业名（core）才算相关，否则判 low
+        hit = (core in hay) if core else any(t.lower() in hay for t in tokens)
         r["confidence"] = "high" if hit else "low"
-        # 过滤：低价值站点（论坛/百科/问答/聚合）即使含联系方式也丢弃；
-        # 仅保留「非低价值商业域名 + 确实含电话/邮箱」的结果，降低无关页误报。
-        if _host_of(r["source"]) in LOW_VALUE_HOSTS:
+        # 过滤1：低价值站点（论坛/百科/问答/聚合，含子域）即使含联系方式也丢弃
+        if _is_low_value_host(_host_of(r["source"])):
             continue
+        # 过滤2：必须确实含电话/邮箱/手机
         if not (r.get("mobiles") or r.get("phones") or r.get("emails")):
+            continue
+        # 过滤3：丢弃不含完整企业名的不相关结果（宁缺毋滥）
+        if not hit:
             continue
         kept.append(r)
     kept.sort(key=lambda r: (r["confidence"] == "high", relevance(r, tokens)), reverse=True)
