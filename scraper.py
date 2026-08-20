@@ -561,6 +561,46 @@ async def _fetch_serp(client, eng: dict, q: str, max_results: int, retries: int 
     return []
 
 
+def _find_contact_pages(html: str, base_url: str) -> list[str]:
+    """从页面提取「联系我们/联系方式/contact」等链接，用于次级抓取（同域优先）。"""
+    from urllib.parse import urljoin
+    soup = BeautifulSoup(html, "lxml")
+    base_host = _host_of(base_url)
+    out: list[str] = []
+    seen: set[str] = set()
+    keys = ("联系我们", "联系方式", "联系我", "contact", "contactus", "about-us", "电话", "tel:", "lianxi")
+    for a in soup.find_all("a", href=True):
+        href = a["href"].strip()
+        txt = a.get_text(" ", strip=True)
+        joined = f"{txt} {href}".lower()
+        if not any(k in joined for k in keys):
+            continue
+        full = urljoin(base_url, href)
+        if full in seen:
+            continue
+        seen.add(full)
+        if not full.lower().startswith(("http://", "https://")):
+            continue
+        if _host_of(full) == base_host:
+            out.insert(0, full)
+        else:
+            out.append(full)
+        if len(out) >= 6:
+            break
+    return out[:4]
+
+
+def _is_redirector(url: str) -> bool:
+    """判断是否为搜索引擎跳转链接（baidu/sogou/so 的 link 跳转器，非内容站点）。"""
+    from urllib.parse import urlparse
+    h = _host_of(url)
+    p = urlparse(url).path.lower()
+    return (
+        h in ("www.baidu.com", "baidu.com", "www.sogou.com", "sogou.com", "www.so.com", "so.com")
+        and ("link" in p or "baidu.php" in p or "url=" in url.lower())
+    )
+
+
 async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: dict | None = None,
                        source_type: str = "search", include_personal: bool = False) -> list[dict]:
     sem = asyncio.Semaphore(CONCURRENCY)
@@ -568,7 +608,7 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
     async def worker(url: str) -> dict | None:
         async with sem:
             await compliance.polite_wait(url)
-            if not await compliance.robots_allowed(client, url):
+            if not _is_redirector(url) and not await compliance.robots_allowed(client, url):
                 print(f"[compliance] robots 禁止，跳过: {url}")
                 return None
             try:
@@ -592,6 +632,23 @@ async def _fetch_pages(client, url_set: list[str], tokens: list[str], headers: d
                     return None
             await asyncio.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
             rec = extract_contacts(html, final_url)
+            has_contact = bool(rec and (rec.get("mobiles") or rec.get("phones") or rec.get("emails")))
+            if not has_contact:
+                # 次级抓取：页面本身无联系方式时，探测「联系我们/联系方式」子页（最多 2 个）
+                for cu in _find_contact_pages(html, final_url)[:2]:
+                    await compliance.polite_wait(cu)
+                    if not await compliance.robots_allowed(client, cu):
+                        continue
+                    try:
+                        pr2 = await client.get(cu, timeout=15, headers=headers or {})
+                        rec2 = extract_contacts(pr2.text, pr2.url or cu)
+                    except Exception:
+                        continue
+                    if rec2 and (rec2.get("mobiles") or rec2.get("phones") or rec2.get("emails")):
+                        rec = rec2
+                        final_url = pr2.url or cu
+                        html = pr2.text
+                        break
             if not rec:
                 return None
             return _apply_compliance(rec, html, source_type, include_personal)
@@ -677,7 +734,7 @@ async def search_company(
     engines = [engine] + [e for e in ("bing", "sogou", "baidu") if e != engine]
     social = [s for s in (social or []) if s in SOCIAL_SOURCES]
 
-    client = AsyncSession(impersonate="chrome", headers=HEADERS, proxy=PROXY, timeout=20, verify=False)
+    client = AsyncSession(impersonate="chrome", headers=HEADERS, proxy=PROXY, timeout=20, verify=False, allow_redirects=True)
     collected: list[dict] = []
     try:
         # 1) 搜索引擎（多引擎回退）
