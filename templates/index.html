@@ -302,6 +302,7 @@ $("go").addEventListener("click", async () => {
     $("csv").disabled = LAST.length === 0;
   } catch (err) {
     clearInterval(timer);
+    $("result").innerHTML = '<div class="empty">请求出错，请稍后重试（可换引擎或减少家数）。</div>';
     setStatus(err.name === "AbortError" ? "⏱ 超时（5 分钟），可减少家数或页数后重试。" : "请求出错：" + err.message);
   } finally { btn.disabled = false; }
 });
